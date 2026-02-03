@@ -10,6 +10,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/activities");
       const activities = await response.json();
 
+      // Preserve the currently selected activity
+      const selectedActivity = activitySelect.value;
+
       // Clear loading message and select options
       activitiesList.innerHTML = "";
       activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
@@ -43,13 +46,11 @@ document.addEventListener("DOMContentLoaded", () => {
           details.participants.forEach((p) => {
             const li = document.createElement("li");
             // Support string entries or objects with email/name
-            if (typeof p === "string") {
-              li.textContent = p;
-            } else if (p && (p.email || p.name)) {
-              li.textContent = p.name || p.email;
-            } else {
-              li.textContent = JSON.stringify(p);
+            let email = p;
+            if (typeof p === "object" && p.email) {
+              email = p.email;
             }
+            li.innerHTML = `${email} <span class="delete-icon" data-activity="${name}" data-email="${email}">&times;</span>`;
             ul.appendChild(li);
           });
 
@@ -69,6 +70,52 @@ document.addEventListener("DOMContentLoaded", () => {
         option.value = name;
         option.textContent = name;
         activitySelect.appendChild(option);
+      });
+
+      // Restore the previously selected activity
+      if (selectedActivity) {
+        activitySelect.value = selectedActivity;
+      }
+
+      // Add event listeners for delete icons
+      activitiesList.addEventListener('click', async (event) => {
+        if (event.target.classList.contains('delete-icon')) {
+          const activityName = event.target.dataset.activity;
+          const email = event.target.dataset.email;
+
+          try {
+            const response = await fetch(
+              `/activities/${encodeURIComponent(activityName)}/unregister?email=${encodeURIComponent(email)}`,
+              {
+                method: "DELETE",
+              }
+            );
+
+            const result = await response.json();
+
+            if (response.ok) {
+              messageDiv.textContent = result.message;
+              messageDiv.className = "message success";
+              // Refresh activities
+              fetchActivities();
+            } else {
+              messageDiv.textContent = result.detail || "An error occurred";
+              messageDiv.className = "message error";
+            }
+
+            messageDiv.classList.remove("hidden");
+
+            // Hide message after 5 seconds
+            setTimeout(() => {
+              messageDiv.classList.add("hidden");
+            }, 5000);
+          } catch (error) {
+            messageDiv.textContent = "Failed to unregister. Please try again.";
+            messageDiv.className = "message error";
+            messageDiv.classList.remove("hidden");
+            console.error("Error unregistering:", error);
+          }
+        }
       });
     } catch (error) {
       activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
